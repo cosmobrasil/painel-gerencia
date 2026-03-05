@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel de Relatórios</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #131d31;
+      --line: #24314f;
+      --text: #e6efff;
+      --muted: #9fb0cf;
+      --accent: #1d9bf0;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 10%, #182846 0%, #0b1220 50%);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .sub { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 12px;
+    }
+    input, button {
+      background: #0d1728;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    input { min-width: 220px; }
+    button { cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .meta {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+    th { font-size: 12px; color: var(--muted); }
+    td .small { color: var(--muted); font-size: 12px; }
+    .actions { display: flex; gap: 6px; }
+    .actions a {
+      text-decoration: none;
+      color: #fff;
+      background: #1f2c46;
+      border: 1px solid #31476f;
+      padding: 6px 9px;
+      border-radius: 7px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .actions a.download { background: var(--ok); border-color: #16a34a; }
+    .status { color: var(--muted); padding: 14px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Painel de Usuários e Relatórios</h1>
+    <p class="sub">Lista de respostas do formulário com acesso para visualizar ou baixar o PDF individual.</p>
+
+    <div class="toolbar">
+      <input id="tokenInput" type="password" placeholder="Token admin (se configurado)" />
+      <button class="primary" id="loadBtn">Atualizar Lista</button>
+    </div>
+
+    <div class="card">
+      <div class="meta">
+        Total de respostas: <strong id="total">0</strong>
+      </div>
+      <div id="status" class="status">Carregando dados...</div>
+      <table id="table" hidden>
+        <thead>
+          <tr>
+            <th>Responsável / Empresa</th>
+            <th>Cidade</th>
+            <th>Produto</th>
+            <th>Data e Hora</th>
+            <th>IGC / IME</th>
+            <th>PDF</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const isLocal = location.hostname.includes('localhost') || location.hostname === '127.0.0.1';
+      const isNetlify = location.hostname.endsWith('netlify.app');
+      const API_BASE = isLocal ? 'http://localhost:3000' : (isNetlify ? '' : 'https://formulario-production-8df7.up.railway.app');
+
+      const loadBtn = document.getElementById('loadBtn');
+      const tokenInput = document.getElementById('tokenInput');
+      const total = document.getElementById('total');
+      const status = document.getElementById('status');
+      const table = document.getElementById('table');
+      const rows = document.getElementById('rows');
+
+      function getTokenQuery() {
+        const token = tokenInput.value.trim();
+        return token ? `token=${encodeURIComponent(token)}` : '';
+      }
+
+      function buildPdfUrl(id, download) {
+        const q = new URLSearchParams();
+        if (tokenInput.value.trim()) q.set('token', tokenInput.value.trim());
+        if (download) q.set('download', '1');
+        const qs = q.toString();
+        return `${API_BASE}/api/admin/respostas/${id}/pdf${qs ? `?${qs}` : ''}`;
+      }
+
+      async function carregar() {
+        status.hidden = false;
+        status.textContent = 'Carregando dados...';
+        table.hidden = true;
+        rows.innerHTML = '';
+
+        const qs = getTokenQuery();
+        const url = `${API_BASE}/api/admin/respostas${qs ? `?${qs}` : ''}`;
+
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Falha ao carregar lista.');
+          }
+
+          const lista = data.data || [];
+          total.textContent = String(lista.length);
+
+          if (!lista.length) {
+            status.textContent = 'Nenhuma resposta encontrada.';
+            return;
+          }
+
+          lista.forEach((item) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>
+                <div>${item.nomeResponsavel || '-'}</div>
+                <div class="small">${item.nomeEmpresa || '-'}</div>
+              </td>
+              <td>${item.cidade || '-'}${item.uf ? `/${item.uf}` : ''}</td>
+              <td>${item.produto || '-'}</td>
+              <td>${item.dataHora || '-'}</td>
+              <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.ime || 0).toFixed(1)}%</td>
+              <td>
+                <div class="actions">
+                  <a href="${buildPdfUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
+                  <a class="download" href="${buildPdfUrl(item.id, true)}" target="_blank" rel="noopener noreferrer">Baixar</a>
+                </div>
+              </td>
+            `;
+            rows.appendChild(tr);
+          });
+
+          status.hidden = true;
+          table.hidden = false;
+        } catch (error) {
+          status.textContent = `Erro: ${error.message}`;
+          table.hidden = true;
+        }
+      }
+
+      loadBtn.addEventListener('click', carregar);
+      carregar();
+    })();
+  </script>
+</body>
+</html>
