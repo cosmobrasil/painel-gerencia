@@ -146,7 +146,10 @@
 
         try {
           const response = await fetch(url);
-          const data = await response.json();
+          const contentType = (response.headers.get('content-type') || '').toLowerCase();
+          const data = contentType.includes('application/json')
+            ? await response.json()
+            : { success: false, error: 'Resposta inválida do servidor (esperado JSON).' };
 
           if (!response.ok || !data.success) {
             throw new Error(data.error || 'Falha ao carregar lista.');
