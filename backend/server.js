@@ -17,6 +17,7 @@ const CNPJ_API_TIMEOUT_MS = parseInt(process.env.CNPJ_API_TIMEOUT_MS || '8000', 
 const ADMIN_PANEL_TOKEN = (process.env.ADMIN_PANEL_TOKEN || '').trim();
 let hasUfColumn = false;
 let hasUnaccentExtension = false;
+let hasRelatorioHtmlColumn = false;
 
 // Inicializar serviço do Google Drive
 const driveService = new GoogleDriveService();
@@ -89,16 +90,36 @@ async function carregarRecursosBanco() {
             ) AS has_uf,
             EXISTS (
                 SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'questionarios'
+                  AND column_name = 'relatorio_html'
+            ) AS has_relatorio_html,
+            EXISTS (
+                SELECT 1
                 FROM pg_extension
                 WHERE extname = 'unaccent'
             ) AS has_unaccent;
         `);
         hasUfColumn = !!result.rows[0]?.has_uf;
+        hasRelatorioHtmlColumn = !!result.rows[0]?.has_relatorio_html;
         hasUnaccentExtension = !!result.rows[0]?.has_unaccent;
         console.log(`🧭 Coluna empresas.uf disponível: ${hasUfColumn ? 'SIM' : 'NÃO'}`);
+        console.log(`🧭 Coluna questionarios.relatorio_html disponível: ${hasRelatorioHtmlColumn ? 'SIM' : 'NÃO'}`);
         console.log(`🧭 Extensão unaccent disponível: ${hasUnaccentExtension ? 'SIM' : 'NÃO'}`);
+
+        if (!hasRelatorioHtmlColumn) {
+            try {
+                await pool.query('ALTER TABLE questionarios ADD COLUMN relatorio_html TEXT');
+                hasRelatorioHtmlColumn = true;
+                console.log('✅ Coluna questionarios.relatorio_html criada automaticamente.');
+            } catch (migrationError) {
+                console.warn('⚠️ Não foi possível criar questionarios.relatorio_html automaticamente:', migrationError.message);
+            }
+        }
     } catch (error) {
         hasUfColumn = false;
+        hasRelatorioHtmlColumn = false;
         hasUnaccentExtension = false;
         console.warn('⚠️ Não foi possível validar coluna UF no banco.');
     }
@@ -527,31 +548,43 @@ app.post('/api/questionario', async (req, res) => {
         }
 
         // 2. Inserir questionário
+        const questionarioParams = [
+            empresaId,
+            respostas.materia_prima,
+            respostas.residuos,
+            respostas.desmonte,
+            respostas.descarte,
+            respostas.recuperacao,
+            respostas.reciclagem,
+            respostas.durabilidade,
+            respostas.reparavel,
+            respostas.reaproveitavel,
+            respostas.ciclo_estendido,
+            respostas.ciclo_rastreado,
+            respostas.documentacao,
+            pontuacao.pontos,
+            pontuacao.percentual,
+            Number(pontuacao.perfilCircularidadeMateriais ?? pontuacao.maturidade ?? 0)
+        ];
+
+        const questionarioColumns = [
+            'empresa_id', 'materia_prima', 'residuos', 'desmonte', 'descarte', 'recuperacao', 'reciclagem',
+            'durabilidade', 'reparavel', 'reaproveitavel', 'ciclo_estendido', 'ciclo_rastreado', 'documentacao',
+            'soma', 'indice_global_circularidade', 'indice_maturidade_estruturante'
+        ];
+
+        if (hasRelatorioHtmlColumn) {
+            questionarioColumns.push('relatorio_html');
+            questionarioParams.push(relatorioHtml || null);
+        }
+
+        const questionarioPlaceholders = questionarioParams.map((_, index) => `$${index + 1}`).join(', ');
+
         const questionarioResult = await client.query(
-            `INSERT INTO questionarios (
-                empresa_id, materia_prima, residuos, desmonte, descarte, recuperacao, reciclagem,
-                durabilidade, reparavel, reaproveitavel, ciclo_estendido, ciclo_rastreado, documentacao,
-                soma, indice_global_circularidade, indice_maturidade_estruturante
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-            RETURNING id`,
-            [
-                empresaId,
-                respostas.materia_prima,
-                respostas.residuos,
-                respostas.desmonte,
-                respostas.descarte,
-                respostas.recuperacao,
-                respostas.reciclagem,
-                respostas.durabilidade,
-                respostas.reparavel,
-                respostas.reaproveitavel,
-                respostas.ciclo_estendido,
-                respostas.ciclo_rastreado,
-                respostas.documentacao,
-                pontuacao.pontos,
-                pontuacao.percentual,
-                pontuacao.maturidade
-            ]
+            `INSERT INTO questionarios (${questionarioColumns.join(', ')})
+             VALUES (${questionarioPlaceholders})
+             RETURNING id`,
+            questionarioParams
         );
 
         await client.query('COMMIT');
@@ -924,6 +957,56 @@ app.get('/api/admin/respostas/:id/pdf', async (req, res) => {
                 error: 'Erro interno ao gerar PDF.'
             });
         }
+    }
+});
+
+app.get('/api/admin/respostas/:id/html', async (req, res) => {
+    if (!verificarAcessoAdmin(req, res)) return;
+
+    if (!hasRelatorioHtmlColumn) {
+        return res.status(501).json({
+            success: false,
+            error: 'HTML do relatório não está disponível neste banco.'
+        });
+    }
+
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT
+                q.id AS questionario_id,
+                q.relatorio_html,
+                q.created_at,
+                e.nome_empresa
+            FROM questionarios q
+            INNER JOIN empresas e ON q.empresa_id = e.id
+            WHERE q.id = $1
+        `, [id]);
+
+        if (!result.rowCount) {
+            return res.status(404).json({
+                success: false,
+                error: 'Relatório não encontrado.'
+            });
+        }
+
+        const row = result.rows[0];
+        if (!row.relatorio_html) {
+            return res.status(404).send('HTML do relatório não encontrado.');
+        }
+
+        const disposition = req.query.download === '1' ? 'attachment' : 'inline';
+        const fileName = `Relatorio_Circularidade_${(row.nome_empresa || 'empresa').replace(/\s+/g, '_')}_${row.questionario_id}.html`;
+
+        res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+        res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
+        res.send(row.relatorio_html);
+    } catch (error) {
+        console.error('Erro ao recuperar HTML do painel admin:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao recuperar HTML.'
+        });
     }
 });
 

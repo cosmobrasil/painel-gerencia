@@ -115,7 +115,7 @@
     <div class="header">
       <div>
         <h1>Dashboard Gerencial</h1>
-        <p class="sub">Lista de formulários respondidos com acesso aos PDFs individuais.</p>
+        <p class="sub">Lista de formulários respondidos com acesso ao relatório original em HTML.</p>
       </div>
       <div class="nav">
         <a href="../index.html">Formulário</a>
@@ -142,7 +142,7 @@
             <th>Produto</th>
             <th>Data e Hora</th>
             <th>IGC / PCM</th>
-            <th>PDF</th>
+            <th>Relatório</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -168,12 +168,12 @@
         return token ? `token=${encodeURIComponent(token)}` : '';
       }
 
-      function buildPdfUrl(id, download) {
+      function buildHtmlUrl(id, download) {
         const q = new URLSearchParams();
         if (tokenInput.value.trim()) q.set('token', tokenInput.value.trim());
         if (download) q.set('download', '1');
         const qs = q.toString();
-        return `${API_BASE}/api/admin/respostas/${id}/pdf${qs ? `?${qs}` : ''}`;
+        return `${API_BASE}/api/admin/respostas/${id}/html${qs ? `?${qs}` : ''}`;
       }
 
       async function carregar() {
@@ -214,8 +214,8 @@
               <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.pcm ?? item.ime ?? 0).toFixed(1)}%</td>
               <td>
                 <div class="actions">
-                  <a href="${buildPdfUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
-                  <a class="download" href="${buildPdfUrl(item.id, true)}" target="_blank" rel="noopener noreferrer">Baixar</a>
+                  <a href="${buildHtmlUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
+                  <a class="download" href="${buildHtmlUrl(item.id, true)}" target="_blank" rel="noopener noreferrer">Baixar HTML</a>
                 </div>
               </td>
             `;
