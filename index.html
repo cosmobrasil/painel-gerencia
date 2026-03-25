@@ -100,7 +100,7 @@
             <th>Cidade</th>
             <th>Produto</th>
             <th>Data e Hora</th>
-            <th>IGC / IME</th>
+            <th>IGC / PCM</th>
             <th>PDF</th>
           </tr>
         </thead>
@@ -173,7 +173,7 @@
               <td>${item.cidade || '-'}${item.uf ? `/${item.uf}` : ''}</td>
               <td>${item.produto || '-'}</td>
               <td>${item.dataHora || '-'}</td>
-              <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.ime || 0).toFixed(1)}%</td>
+              <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.pcm ?? item.ime ?? 0).toFixed(1)}%</td>
               <td>
                 <div class="actions">
                   <a href="${buildPdfUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
