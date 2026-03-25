@@ -81,7 +81,7 @@
 <body>
   <div class="wrap">
     <h1>Painel de Usuários e Relatórios</h1>
-    <p class="sub">Lista de respostas do formulário com acesso para visualizar ou baixar o PDF individual.</p>
+    <p class="sub">Lista de respostas do formulário com acesso para visualizar ou baixar o relatório HTML individual.</p>
 
     <div class="toolbar">
       <input id="tokenInput" type="password" placeholder="Token admin (se configurado)" />
@@ -101,7 +101,7 @@
             <th>Produto</th>
             <th>Data e Hora</th>
             <th>IGC / PCM</th>
-            <th>PDF</th>
+            <th>Relatório HTML</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -127,12 +127,12 @@
         return token ? `token=${encodeURIComponent(token)}` : '';
       }
 
-      function buildPdfUrl(id, download) {
+      function buildHtmlUrl(id, download) {
         const q = new URLSearchParams();
         if (tokenInput.value.trim()) q.set('token', tokenInput.value.trim());
         if (download) q.set('download', '1');
         const qs = q.toString();
-        return `${API_BASE}/api/admin/respostas/${id}/pdf${qs ? `?${qs}` : ''}`;
+        return `${API_BASE}/api/admin/respostas/${id}/html${qs ? `?${qs}` : ''}`;
       }
 
       async function carregar() {
@@ -176,8 +176,8 @@
               <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.pcm ?? item.ime ?? 0).toFixed(1)}%</td>
               <td>
                 <div class="actions">
-                  <a href="${buildPdfUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
-                  <a class="download" href="${buildPdfUrl(item.id, true)}" target="_blank" rel="noopener noreferrer">Baixar</a>
+                  <a href="${buildHtmlUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
+                  <a class="download" href="${buildHtmlUrl(item.id, true)}" target="_blank" rel="noopener noreferrer">Baixar</a>
                 </div>
               </td>
             `;

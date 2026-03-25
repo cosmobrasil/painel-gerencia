@@ -803,12 +803,17 @@ app.get('/api/admin/respostas', async (req, res) => {
     if (!verificarAcessoAdmin(req, res)) return;
 
     try {
+        const { whereClause, params } = construirWhereDashboard(req.query);
+        const htmlSelect = hasRelatorioHtmlColumn
+            ? 'q.relatorio_html IS NOT NULL AS tem_relatorio_html'
+            : 'FALSE AS tem_relatorio_html';
         const result = await pool.query(`
             SELECT
                 q.id AS questionario_id,
                 q.created_at,
                 q.indice_global_circularidade,
                 q.indice_maturidade_estruturante,
+                ${htmlSelect},
                 e.nome_responsavel,
                 e.nome_empresa,
                 e.cidade,
@@ -816,8 +821,9 @@ app.get('/api/admin/respostas', async (req, res) => {
                 e.produto_avaliado
             FROM questionarios q
             INNER JOIN empresas e ON q.empresa_id = e.id
+            ${whereClause}
             ORDER BY q.created_at DESC
-        `);
+        `, params);
 
         res.json({
             success: true,
@@ -830,7 +836,8 @@ app.get('/api/admin/respostas', async (req, res) => {
                 produto: formatarProdutoExibicao(row.produto_avaliado),
                 dataHora: formatarDataHora(row.created_at),
                 igc: Number(row.indice_global_circularidade || 0),
-                ime: Number(row.indice_maturidade_estruturante || 0)
+                ime: Number(row.indice_maturidade_estruturante || 0),
+                temHtml: Boolean(row.tem_relatorio_html)
             }))
         });
     } catch (error) {
@@ -1000,6 +1007,7 @@ app.get('/api/admin/respostas/:id/html', async (req, res) => {
 
         res.setHeader('Content-Type', 'text/html; charset=UTF-8');
         res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.send(row.relatorio_html);
     } catch (error) {
         console.error('Erro ao recuperar HTML do painel admin:', error);
