@@ -564,13 +564,13 @@ app.post('/api/questionario', async (req, res) => {
             respostas.documentacao,
             pontuacao.pontos,
             pontuacao.percentual,
-            Number(pontuacao.perfilCircularidadeMateriais ?? pontuacao.maturidade ?? 0)
+            Number(pontuacao.pcm ?? pontuacao.perfilCircularidadeMateriais ?? pontuacao.maturidade ?? 0)
         ];
 
         const questionarioColumns = [
             'empresa_id', 'materia_prima', 'residuos', 'desmonte', 'descarte', 'recuperacao', 'reciclagem',
             'durabilidade', 'reparavel', 'reaproveitavel', 'ciclo_estendido', 'ciclo_rastreado', 'documentacao',
-            'soma', 'indice_global_circularidade', 'indice_maturidade_estruturante'
+            'soma', 'indice_global_circularidade', 'indice_pcm'
         ];
 
         if (hasRelatorioHtmlColumn) {
@@ -642,7 +642,7 @@ app.get('/api/questionarios', async (req, res) => {
         const result = await pool.query(`
             SELECT
                 e.nome_empresa, e.cidade, e.produto_avaliado,
-                q.indice_global_circularidade, q.indice_maturidade_estruturante,
+                q.indice_global_circularidade, q.indice_pcm,
                 q.created_at
             FROM questionarios q
             INNER JOIN empresas e ON q.empresa_id = e.id
@@ -721,7 +721,7 @@ app.get('/api/dashboard/overview', async (req, res) => {
                 COUNT(*)::int AS total_formularios,
                 ROUND(AVG(q.soma)::numeric, 2) AS media_total_pontos,
                 ROUND(AVG(q.indice_global_circularidade)::numeric, 2) AS media_igc,
-                ROUND(AVG(q.indice_maturidade_estruturante)::numeric, 2) AS media_ime,
+                ROUND(AVG(q.indice_pcm)::numeric, 2) AS media_pcm,
                 AVG(CASE q.materia_prima WHEN 1 THEN 0 WHEN 2 THEN 2 WHEN 3 THEN 3 WHEN 4 THEN 2 WHEN 5 THEN 1 ELSE 0 END)::numeric AS s1,
                 AVG(CASE q.residuos WHEN 1 THEN 0 WHEN 2 THEN 2 WHEN 3 THEN 1 ELSE 0 END)::numeric AS s2,
                 AVG(CASE q.desmonte WHEN 1 THEN 2 WHEN 2 THEN 0 WHEN 3 THEN 1 ELSE 0 END)::numeric AS s3,
@@ -766,7 +766,7 @@ app.get('/api/dashboard/overview', async (req, res) => {
             monitoramento: mediaPercentualPerguntas([10, 11, 12], medias)
         };
 
-        const imeDimensoes = {
+        const pcmDimensoes = {
             durabilidade: mediaPercentualPerguntas([7], medias),
             designReparavel: mediaPercentualPerguntas([8], medias),
             designReaproveitamento: mediaPercentualPerguntas([9], medias),
@@ -776,7 +776,7 @@ app.get('/api/dashboard/overview', async (req, res) => {
         };
 
         const mediaIgc = Number(row.media_igc || 0);
-        const mediaIme = Number(row.media_ime || 0);
+        const mediaPcm = Number(row.media_pcm || 0);
 
         res.json({
             success: true,
@@ -784,10 +784,10 @@ app.get('/api/dashboard/overview', async (req, res) => {
                 totalFormularios,
                 mediaTotalPontos: Number(row.media_total_pontos || 0),
                 mediaIGC: mediaIgc,
-                mediaIME: mediaIme,
+                mediaPCM: mediaPcm,
                 igcGap: Math.max(0, 100 - mediaIgc),
                 topicos,
-                imeDimensoes
+                pcmDimensoes
             }
         });
     } catch (error) {
@@ -812,7 +812,7 @@ app.get('/api/admin/respostas', async (req, res) => {
                 q.id AS questionario_id,
                 q.created_at,
                 q.indice_global_circularidade,
-                q.indice_maturidade_estruturante,
+                q.indice_pcm,
                 ${htmlSelect},
                 e.nome_responsavel,
                 e.nome_empresa,
@@ -836,7 +836,7 @@ app.get('/api/admin/respostas', async (req, res) => {
                 produto: formatarProdutoExibicao(row.produto_avaliado),
                 dataHora: formatarDataHora(row.created_at),
                 igc: Number(row.indice_global_circularidade || 0),
-                ime: Number(row.indice_maturidade_estruturante || 0),
+                pcm: Number(row.indice_pcm || 0),
                 temHtml: Boolean(row.tem_relatorio_html)
             }))
         });
@@ -860,7 +860,7 @@ app.get('/api/admin/respostas/:id/pdf', async (req, res) => {
                 q.created_at,
                 q.soma,
                 q.indice_global_circularidade,
-                q.indice_maturidade_estruturante,
+                q.indice_pcm,
                 q.materia_prima, q.residuos, q.desmonte, q.descarte, q.recuperacao, q.reciclagem,
                 q.durabilidade, q.reparavel, q.reaproveitavel, q.ciclo_estendido, q.ciclo_rastreado, q.documentacao,
                 e.nome_responsavel, e.nome_empresa, e.cidade, e.uf, e.setor_economico, e.produto_avaliado
@@ -933,7 +933,7 @@ app.get('/api/admin/respostas/:id/pdf', async (req, res) => {
         doc.fontSize(10);
         doc.text(`Pontuação total: ${row.soma}`);
         doc.text(`Índice Global de Circularidade (IGC): ${Number(row.indice_global_circularidade || 0).toFixed(2)}%`);
-        doc.text(`Índice de Maturidade Estruturante (IME): ${Number(row.indice_maturidade_estruturante || 0).toFixed(2)}%`);
+        doc.text(`Perfil de Circularidade de Materiais (PCM): ${Number(row.indice_pcm || 0).toFixed(2)}%`);
         doc.moveDown(1);
 
         doc.fontSize(12).text('Percentuais por Tópico');

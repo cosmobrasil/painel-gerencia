@@ -211,7 +211,7 @@
               <td>${item.cidade || '-'}${item.uf ? `/${item.uf}` : ''}</td>
               <td>${item.produto || '-'}</td>
               <td>${item.dataHora || '-'}</td>
-              <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.pcm ?? item.ime ?? 0).toFixed(1)}%</td>
+              <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.pcm || 0).toFixed(1)}%</td>
               <td>
                 <div class="actions">
                   <a href="${buildHtmlUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
