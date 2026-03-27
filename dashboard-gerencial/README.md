@@ -2,6 +2,10 @@
 
 Aplicação administrativa para listar formulários respondidos e abrir ou baixar o HTML original de cada resposta.
 
+## Acesso
+
+O dashboard agora abre bloqueado por uma senha. O usuário precisa informar a senha de acesso para carregar a lista e acessar os relatórios. O acesso não é persistido entre recargas.
+
 ## Endpoints usados
 
 - `GET /api/admin/respostas`
@@ -10,7 +14,3 @@ Aplicação administrativa para listar formulários respondidos e abrir ou baixa
 ## Estrutura
 
 - `index.html`: frontend estatico do dashboard gerencial
-
-## Acesso
-
-Se `ADMIN_PANEL_TOKEN` estiver configurado no backend, informe o token no campo do painel para consultar a lista e abrir os relatórios HTML.

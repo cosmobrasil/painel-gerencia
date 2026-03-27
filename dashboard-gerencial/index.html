@@ -24,6 +24,7 @@
       padding: 24px;
     }
     .wrap { max-width: 1180px; margin: 0 auto; }
+    .wrap.locked { display: none; }
     .header {
       display: flex;
       justify-content: space-between;
@@ -66,6 +67,7 @@
       padding: 10px;
       margin-bottom: 12px;
     }
+    .toolbar.hidden { display: none; }
     input {
       min-width: 220px;
       background: #0d1728;
@@ -102,6 +104,37 @@
       color: #fff;
     }
     .status { color: var(--muted); padding: 14px; font-size: 13px; }
+    .gate {
+      min-height: calc(100vh - 48px);
+      display: grid;
+      place-items: center;
+    }
+    .gate-card {
+      width: min(480px, 100%);
+      background: rgba(19, 29, 49, 0.96);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+    }
+    .gate-card h1 { font-size: 26px; }
+    .gate-card p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .gate-form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    .gate-form input {
+      flex: 1 1 240px;
+      min-width: 0;
+    }
+    .gate-error {
+      min-height: 20px;
+      margin-top: 12px;
+      color: #fca5a5;
+      font-size: 13px;
+    }
 
     @media (max-width: 900px) {
       .header { flex-direction: column; }
@@ -111,7 +144,18 @@
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div id="gate" class="gate">
+    <div class="gate-card">
+      <h1>Dashboard Gerencial</h1>
+      <p>Digite a senha de acesso para carregar a lista de respostas e abrir os relatórios.</p>
+      <form id="gateForm" class="gate-form">
+        <input id="gatePassword" type="password" placeholder="Senha de acesso" autocomplete="current-password" />
+        <button class="primary" type="submit">Entrar</button>
+      </form>
+      <div id="gateError" class="gate-error" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="wrap locked">
     <div class="header">
       <div>
         <h1>Dashboard Gerencial</h1>
@@ -124,8 +168,7 @@
       </div>
     </div>
 
-    <div class="toolbar">
-      <input id="tokenInput" type="password" placeholder="Token admin (se configurado)" />
+    <div id="toolbar" class="toolbar hidden">
       <button class="primary" id="loadBtn">Atualizar lista</button>
     </div>
 
@@ -155,26 +198,46 @@
       const isLocal = location.hostname.includes('localhost') || location.hostname === '127.0.0.1';
       const isNetlify = location.hostname.endsWith('netlify.app');
       const API_BASE = isLocal ? 'http://localhost:3000' : (isNetlify ? '' : 'https://formulario-production-8df7.up.railway.app');
+      const ADMIN_PASSWORD = 'Cosmob2026@';
 
+      const gate = document.getElementById('gate');
+      const gateForm = document.getElementById('gateForm');
+      const gatePassword = document.getElementById('gatePassword');
+      const gateError = document.getElementById('gateError');
+      const wrap = document.querySelector('.wrap');
+      const toolbar = document.getElementById('toolbar');
       const loadBtn = document.getElementById('loadBtn');
-      const tokenInput = document.getElementById('tokenInput');
       const total = document.getElementById('total');
       const status = document.getElementById('status');
       const table = document.getElementById('table');
       const rows = document.getElementById('rows');
 
       function getTokenQuery() {
-        const token = tokenInput.value.trim();
-        return token ? `token=${encodeURIComponent(token)}` : '';
+        return `token=${encodeURIComponent(ADMIN_PASSWORD)}`;
       }
 
       function buildReportUrl(id, download, temHtml) {
         const q = new URLSearchParams();
-        if (tokenInput.value.trim()) q.set('token', tokenInput.value.trim());
+        q.set('token', ADMIN_PASSWORD);
         if (download) q.set('download', '1');
         const qs = q.toString();
         const endpoint = temHtml ? 'html' : 'pdf';
         return `${API_BASE}/api/admin/respostas/${id}/${endpoint}${qs ? `?${qs}` : ''}`;
+      }
+
+      function setLocked(locked) {
+        gate.hidden = !locked;
+        wrap.classList.toggle('locked', locked);
+        toolbar.classList.toggle('hidden', locked);
+        document.body.style.overflow = locked ? 'hidden' : '';
+      }
+
+      async function validateAndUnlock(token) {
+        if (token !== ADMIN_PASSWORD) {
+          throw new Error('Senha inválida.');
+        }
+
+        setLocked(false);
       }
 
       async function carregar() {
@@ -231,11 +294,34 @@
         } catch (error) {
           status.textContent = `Erro: ${error.message}`;
           table.hidden = true;
+          if (/autoriz|senha|token|401|403/i.test(error.message)) {
+            sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+            setLocked(true);
+          }
         }
       }
 
+      gateForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        gateError.textContent = '';
+
+        const token = gatePassword.value.trim();
+        if (!token) {
+          gateError.textContent = 'Digite a senha de acesso.';
+          return;
+        }
+
+        try {
+          await validateAndUnlock(token);
+          await carregar();
+        } catch (error) {
+          gateError.textContent = error.message || 'Não foi possível validar a senha.';
+          setLocked(true);
+        }
+      });
+
       loadBtn.addEventListener('click', carregar);
-      carregar();
+      setLocked(true);
     })();
   </script>
 </body>
