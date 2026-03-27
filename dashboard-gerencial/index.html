@@ -168,12 +168,13 @@
         return token ? `token=${encodeURIComponent(token)}` : '';
       }
 
-      function buildHtmlUrl(id, download) {
+      function buildReportUrl(id, download, temHtml) {
         const q = new URLSearchParams();
         if (tokenInput.value.trim()) q.set('token', tokenInput.value.trim());
         if (download) q.set('download', '1');
         const qs = q.toString();
-        return `${API_BASE}/api/admin/respostas/${id}/html${qs ? `?${qs}` : ''}`;
+        const endpoint = temHtml ? 'html' : 'pdf';
+        return `${API_BASE}/api/admin/respostas/${id}/${endpoint}${qs ? `?${qs}` : ''}`;
       }
 
       async function carregar() {
@@ -202,6 +203,9 @@
           }
 
           lista.forEach((item) => {
+            const temHtml = Boolean(item.temHtml);
+            const viewLabel = temHtml ? 'Visualizar HTML' : 'Visualizar PDF';
+            const downloadLabel = temHtml ? 'Baixar HTML' : 'Baixar PDF';
             const tr = document.createElement('tr');
             tr.innerHTML = `
               <td>
@@ -214,8 +218,8 @@
               <td>${Number(item.igc || 0).toFixed(1)}% / ${Number(item.pcm || 0).toFixed(1)}%</td>
               <td>
                 <div class="actions">
-                  <a href="${buildHtmlUrl(item.id, false)}" target="_blank" rel="noopener noreferrer">Visualizar</a>
-                  <a class="download" href="${buildHtmlUrl(item.id, true)}" target="_blank" rel="noopener noreferrer">Baixar HTML</a>
+                  <a href="${buildReportUrl(item.id, false, temHtml)}" target="_blank" rel="noopener noreferrer">${viewLabel}</a>
+                  <a class="download" href="${buildReportUrl(item.id, true, temHtml)}" target="_blank" rel="noopener noreferrer">${downloadLabel}</a>
                 </div>
               </td>
             `;
